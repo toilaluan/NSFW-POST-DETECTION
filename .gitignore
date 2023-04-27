@@ -1,5 +1,6 @@
 __pycache__
-*.csv
+!*.csv
 .vscode
 lightning_logs
 *.zip
+dataset/*
