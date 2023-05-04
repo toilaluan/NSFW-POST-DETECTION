@@ -3,5 +3,4 @@ __pycache__
 .vscode
 lightning_logs
 *.zip
-dataset/*
 train_logs/*

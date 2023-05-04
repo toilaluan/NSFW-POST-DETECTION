@@ -6,23 +6,27 @@ from torchmetrics.classification import (
     BinaryPrecision,
     BinaryRecall,
     BinaryF1Score,
-    Accuracy,
-    Precision,
-    Recall,
 )
 
 
 class LitClassification(pl.LightningModule):
-    def __init__(self, model, configs=None):
+    def __init__(self, model, tokenizer, configs=None):
         super().__init__()
         self.model = model
         self.configs = configs
-        self.val_acc = Accuracy("multiclass", num_classes=2)
-        self.val_p = Precision("multiclass", num_classes=2)
-        self.val_r = Recall("multiclass", num_classes=2)
+        self.tokenizer = tokenizer
 
     def forward(self, x):
-        return self.model(**x)
+        x = self.tokenizer.batch_encode_plus(
+            x,
+            padding="max_length",
+            truncation=True,
+            max_length=self.configs.max_length,
+            return_attention_mask=True,
+            return_tensors="pt",
+        )
+        x = x["input_ids"].cuda()
+        return self.model(x)
 
     def on_fit_start(self) -> None:
         return super().on_fit_start()
@@ -46,24 +50,17 @@ class LitClassification(pl.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         x, y = train_batch
-        out = self.forward(x).logits
-        loss = F.cross_entropy(out.float(), y.long())
+        out = self.forward(x)
+        loss = F.binary_cross_entropy_with_logits(out.float(), y.float())
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        out = self.forward(x).logits
-        loss = F.cross_entropy(out.float(), y.long())
+        out = self.model(x)
+        loss = F.binary_cross_entropy_with_logits(out.float(), y.float())
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.val_acc.update(out, y)
-        self.val_p.update(out, y)
-        self.val_r.update(out, y)
-
-    def on_validation_epoch_end(self) -> None:
-        self.log("val_acc", self.val_acc.compute(), prog_bar=True)
-        self.log("val_p", self.val_p.compute(), prog_bar=True)
-        self.log("val_r", self.val_r.compute(), prog_bar=True)
-        self.val_acc.reset()
-        self.val_p.reset()
-        self.val_r.reset()
+        return {
+            "pred": out,
+            "target": y,
+        }

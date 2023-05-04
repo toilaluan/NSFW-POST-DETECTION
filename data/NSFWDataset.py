@@ -1,20 +1,13 @@
 from torch.utils.data import Dataset
 import pandas as pd
 import torch
-from transformers import AutoTokenizer
 
 
 class NSFWDataset(Dataset):
-    def __init__(self, csv_path, max_length=64, mode="train"):
+    def __init__(self, csv_path, max_length=64):
         self.max_length = max_length
         self.data = pd.read_csv(csv_path)
         self.data = self.data[["title", "over_18"]]
-        if mode == "train":
-            trues = self.data[self.data["over_18"] == True]
-            falses = self.data[self.data["over_18"] == False].sample(
-                n=len(trues), random_state=42
-            )
-            self.data = pd.concat([trues, falses])
 
     def __len__(self):
         return len(self.data)
@@ -23,6 +16,7 @@ class NSFWDataset(Dataset):
         row = self.data.iloc[idx]
         title = row["title"]
         label = int(row["over_18"])
+        label = torch.tensor(label).long().unsqueeze(0)
         return title, label
 
 
